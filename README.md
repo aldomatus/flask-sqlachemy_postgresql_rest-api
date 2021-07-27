@@ -19,7 +19,7 @@
   <h4 align="center"></h4>
 
   <p align="center">
-    A simple REST API made with flask and containerized in Docker so that you can practice the methods: GET, POST, PUT and DELETE, create Docker containers and make use of Docker-compose.yml.
+    A REST api made with Flask in which you can practice the methods: GET, POST, PUT and DELETE, of a tasks list application. This API will be connected to the postgres database.
   </p>
 </p>
 
@@ -66,7 +66,17 @@ This project is made with the intention of teaching how to use Docker with Flask
 
 This section should list any major frameworks that you built your project using. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
 * [Flask](https://flask.palletsprojects.com/en/2.0.x/)
-* [Docker](https://www.docker.com/)
+* [Postgres](https://www.postgresql.org/)
+
+### Libraries
+
+#### SQLAlchemy (Offers an ORM along with a Core)
+The Python SQL Toolkit and Object Relational Mapper
+SQLAlchemy is the Python SQL toolkit and Object Relational Mapper that gives application developers the full power and flexibility of SQL.
+
+#### Flask-Marshmallow (Serializer)
+Flask-Marshmallow is a thin integration layer for Flask (a Python web framework) and marshmallow (an object serialization/deserialization library) that adds additional features to marshmallow, including URL and Hyperlinks fields for HATEOAS-ready APIs. It also (optionally) integrates with Flask-SQLAlchemy.
+
 
 ### To check your rest api
 #### Insomnia
@@ -85,93 +95,125 @@ Link to visit postman website: - [Link](https://www.postman.com/downloads/)
  <img src=https://seeklogo.com/images/P/postman-logo-F43375A2EB-seeklogo.com.png width="150" alt="Header" >
 </div>
 
+
+<!-- GETTING STARTED -->
+## Getting Started
+
+
+
+### Prerequisites
+For this project you need to have the postgres database manager installed. If you have not installed it yet, you can install it by entering the following: link, you can work with its graphical interface or from the console, both ways will serve you.
+Let's create a database from the terminal:
+
+1. Once postgres is installed we can open a terminal and type the following code to access postgres
+```
+   sudo -u postgres psql
+   
+```
+
+2. 
+
+
+
 <!-- EXPLAIN CODE -->
 ## Description of the REST API code
 <details close="close">
     <summary>Click to see all the code</summary>
     
 ```python
-#   Flask 
-from flask import Flask, request, jsonify
-
-#   Data
-from products import products
+# Flask
+from flask import Flask, request, jsonify, render_template
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
 
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@localhost/flaskpostgres'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-#   Testing route
-@app.route('/ping', methods=['GET'])
-def ping():
-    return jsonify({'response':'ping!'})
-
-#   Create new products
-@app.route('/products', methods=['POST'])
-def addProduct():
-    new_product = {
-        'name': request.json['name'],
-        'price': request.json['price'],
-        'quantity': 12
-    }
-    products.append(new_product)
-    return jsonify({'products': products})
-
-# get data routes
-@app.route('/products', methods=['GET'])
-def getProducts():
-    return jsonify({'products': products})
-
-@app.route('/products/<string:product_name>')
-def getProduct(product_name):
-    productsFound = [product for product in products if product['name'] == product_name]
-    if len(productsFound)>0:
-        return jsonify({'product': productsFound[0]})
-    return jsonify({'message': 'Product not found'})
-
-# Update products
-@app.route('/products/<string:product_name>', methods=['PUT'])
-def editProduct(product_name):
-    productsFound = [product for product in products if product['name'] == product_name]
-    if len(productsFound) > 0:
-        productsFound[0]['name'] = request.json['name']
-        productsFound[0]['price'] = request.json['price']
-        productsFound[0]['quantity'] = request.json['quantity']
-
-        return jsonify({
-            'message': 'Product updated',
-            'product': productsFound[0]
-        })
-    return jsonify({'message': 'Product not found'})
-
-# Delete products
-@app.route('/products/<string:product_name>', methods=['DELETE'])
-def deleteProduct(product_name):
-    productFound = [product for product in products if product['name'] == product_name]
-    if len(productFound) > 0:
-        products.remove(productFound[0])
-        return jsonify({
-            'message': 'Product deleted',
-            'products': products
-        })
-    return jsonify(
-        {'message': 'Product not found'}
-    )
+db = SQLAlchemy(app)
+ma = Marshmallow(app)
 
 
-if __name__=='__main__':
+class Task(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(70), unique=True)
+    description = db.Column(db.String(100))
+
+    def __init__(self, title, description):
+        self.title = title
+        self.description = description
+
+db.create_all()
+
+class TaskSchema(ma.Schema):
+    class Meta:
+        fields = ('id', 'title', 'description')
+
+
+task_schema = TaskSchema()
+tasks_schema = TaskSchema(many=True)
+
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({'message': 'Welcome to my API'})
+
+@app.route('/tasks', methods=['POST'])
+def create_task():
+    title = request.json['title']
+    description = request.json['description']
+
+    new_task= Task(title, description)
+
+    db.session.add(new_task)
+    db.session.commit()
+
+    return task_schema.jsonify(new_task)
+
+@app.route('/tasks', methods=['GET'])
+def get_tasks():
+    all_tasks = Task.query.all()
+    result = tasks_schema.dump(all_tasks)
+    return jsonify(result)
+
+@app.route('/tasks/<id>', methods=['GET'])
+def get_task(id):
+    task = Task.query.get(id)
+    return task_schema.jsonify(task)
+
+@app.route('/tasks/<id>', methods=['PUT'])
+def update_task(id):
+    task = Task.query.get(id)
+    title = request.json['title']
+    description = request.json['description']
+
+    task.title = title
+    task.description = description
+
+    db.session.commit()
+    return task_schema.jsonify(task)
+
+@app.route('/tasks/<id>', methods=['DELETE'])
+def remove_task(id):
+    task = Task.query.get(id)
+    db.session.delete(task)
+    db.session.commit()
+    return task_schema.jsonify(task)
+    
+
+if __name__ == '__main__':
     app.run(debug=True, port=5000)
 ```
   
 </details>
   
 ### Describing the code 
-  1. first import libraries and our products file which is where we have some saved products, __name__ is just a convenient way to get the import name of the place the app is defined. Flask uses the import name to know where to look up resources, templates, static files, instance folder, etc. The application instance is an object of class Flask:
+  1. first import libraries, __name__ is just a convenient way to get the import name of the place the app is defined. Flask uses the import name to know where to look up resources, templates, static files, instance folder, etc. The application instance is an object of class Flask:
 ```python
   
-#   Flask 
-from flask import Flask, request, jsonify
-
-#   Data
-from products import products
+# Flask
+from flask import Flask, request, jsonify, render_template
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
 
 app = Flask(__name__)
 ```
@@ -269,24 +311,7 @@ def deleteProduct(product_name):
 if __name__=='__main__':
     app.run(debug=True, port=5000)
 ```
-  
-<!-- GETTING STARTED -->
-## Getting Started
 
-### Prerequisites
-
-For this project you need to have Docker and Docker compose installed
-
-<ol>
-<li>Link to install Docker engine:</li>
-<a href="https://docs.docker.com/engine/install/ubuntu/">Linux</a>
-<a href="https://docs.docker.com/engine/install/">  -  Windows or Mac</a>
-
-<li>After installing docker engine install docker compose</li>
-<a href="https://docs.docker.com/compose/install/">Linux Windows Mac</a>
-</li>
-
-Fist
 
 ### Installation
 
