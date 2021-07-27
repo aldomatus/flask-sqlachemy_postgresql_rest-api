@@ -280,7 +280,7 @@ def home():
     return jsonify({'message': 'Welcome to my API'})
 ```
   
-   3. The following decorated function uses the POST method. "Used to send HTML form data to the server. The data received by the POST method is not cached by the server."[1] The following decorated function uses the POST method. The most common method. A GET message is send, and the server returns data. In our example we receive the data sent wi
+   7. The following decorated function uses the POST method. "Used to send HTML form data to the server. The data received by the POST method is not cached by the server."[1] The following decorated function uses the POST method. The most common method. A GET message is send, and the server returns data. In our example we receive with request the title and the description which we save in two variables that are sent to the Task class and then we make an instance that we will save inside new_task. Finally with session add we add to the database and save with commit, we return the new task with the help of task_schema.
 
 ```python
   
@@ -298,65 +298,58 @@ def create_task():
 ```
   
   
- 4. The following decorated function uses the GET method. The most common method. A GET message is send, and the server returns data. In our case, it will return the list of products to us.
+ 8. The following decorated function uses the GET method. The most common method. A GET message is send, and the server returns data. In our case, it will return the list of tasks to us. Hacemos uso de query.all() para traer toda la informacion de la base de datos. de Marshmallow utilizamos dump para esquematizar nuestros datos y retornamos un json con ayuda de jsonify para que nuestra api sea consumida
 ```python
   
-# get data routes
-@app.route('/products', methods=['GET'])
-def getProducts():
-    return jsonify({'products': products})
+@app.route('/tasks', methods=['GET'])
+def get_tasks():
+    all_tasks = Task.query.all()
+    result = tasks_schema.dump(all_tasks)
+    return jsonify(result)
 ```
-  5. Like the previous function, the next one uses the GET method, but as we can see, within the path / products / <string: product_name> we obtain a variable product_name of type string, which our client will send us so that we can send the specific product information.
+  5. Like the previous function, the next one uses the GET method, but as we can see, within the path /tasks/ <id> we obtain an id , which our client will send us so that we can send the specific task information.
+  In this case we use get to obtain a specific task and return with the help of a marshmello scheme
 ```python
-  
-@app.route('/products/<string:product_name>')
-def getProduct(product_name):
-    productsFound = [product for product in products if product['name'] == product_name]
-    if len(productsFound)>0:
-        return jsonify({'product': productsFound[0]})
-    return jsonify({'message': 'Product not found'})
-```
-  
-  
-  
-    6. GET method "replace all current representations of the target resource with uploaded content"[1], We obtain the name of the specific product with the product_name variable, with the help of the request we extract the information received from the client and then save it either in a database or as in this case that being only an example we save it in the productsFound variable that later will be lost.
-```python
-  
-  # Update products
-@app.route('/products/<string:product_name>', methods=['PUT'])
-def editProduct(product_name):
-    productsFound = [product for product in products if product['name'] == product_name]
-    if len(productsFound) > 0:
-        productsFound[0]['name'] = request.json['name']
-        productsFound[0]['price'] = request.json['price']
-        productsFound[0]['quantity'] = request.json['quantity']
+@app.route('/tasks/<id>', methods=['GET'])
+def get_task(id):
+    task = Task.query.get(id)
+    return task_schema.jsonify(task)
 
-        return jsonify({
-            'message': 'Product updated',
-            'product': productsFound[0]
-        })
-    return jsonify({'message': 'Product not found'})
+```
+  
+  
+  
+    6. GET method "replace all current representations of the target resource with uploaded content"[1], We obtain the id of the specific task with the id variable, with the help of the request we extract the information received from the client and then we save the information by doing session.commit() and we return the updated task.
+```python
+  
+@app.route('/tasks/<id>', methods=['PUT'])
+def update_task(id):
+    task = Task.query.get(id)
+    title = request.json['title']
+    description = request.json['description']
+
+    task.title = title
+    task.description = description
+
+    db.session.commit()
+    return task_schema.jsonify(task)
 ```
 
   
-      7. DELETE: "Deletes all current representations of the target resource given by the URL"[1], with the listcompehension we can find the product from the name we receive from the url, once the product is found we can use the remove function to remove it from the list and send the user the list with its removed product.
+      7. DELETE: "Deletes all current representations of the target resource given by the URL"[1], to delete, we receive the id from the url, with query.get we identify what product it is and we delete the product with delete, finally we commit for the operation to proceed and we return the deleted task
   
   ```python
   
 # Delete products
-@app.route('/products/<string:product_name>', methods=['DELETE'])
-def deleteProduct(product_name):
-    productFound = [product for product in products if product['name'] == product_name]
-    if len(productFound) > 0:
-        products.remove(productFound[0])
-        return jsonify({
-            'message': 'Product deleted',
-            'products': products
-        })
-    return jsonify(
-        {'message': 'Product not found'}
-    )
+@app.route('/tasks/<id>', methods=['DELETE'])
+def remove_task(id):
+    task = Task.query.get(id)
+    db.session.delete(task)
+    db.session.commit()
+    return task_schema.jsonify(task)
 ```
+  
+  
       8. using the application instance run Method to start the embedded Flask web server:
   
 ```python
@@ -381,15 +374,43 @@ if __name__=='__main__':
    ```
   > git branch -m main is the command to rename the branch
   
-4. In the folder where docker-compose.yml is located, open a terminal (the same address where you ran the previous line) and write the following command to build the image.
-   ```
-   docker-compose build
-   ```
-5. Once the previous execution is finished, you must run the services made in the build.
-   ```
-   docker-compose up
-   ```
-6. If all goes well, our application should already be executing the app.py file with python using the mysql database, now we just have to check by entering the following link in our browser:
+4. inside flask-sqlachemy_postgresql_rest-api we create a virtual environment to have our libraries together. we do it as follows
+  
+  4.1. To download the library that allows us to create virtual environments
+  ```
+  sudo apt-get install python3-venv
+  
+  ```
+
+  4.2. Create the virtual environment
+  ```
+  python3 -m venv folder_name
+  
+  ```
+
+  4.3. Activate the virtual environment we go to the created folder and inside the terminal we write:
+  ```
+  source bin / activate
+  
+  ```
+  
+5. Once the virtual environment is activated, we return to the folder where the requirements.txt file is and to install our libraries we must type the following line. (if you are using python 3 you only must type python3)
+  ```
+  python -m pip install -r requirements.txt
+  
+  ```
+6. then inside the console we write the following to indicate the file to flask.
+  ```
+  export FLASK_APP = src/app.py
+  
+  ```
+7. we run the server with...
+  ```
+  run flask
+  
+  ```
+
+8. If all goes well, our application should already be executing the app.py file with python using the postgres database, now we just have to check by entering the following link in our browser:
 
    ```
    http://localhost:5000/
@@ -403,14 +424,14 @@ if __name__=='__main__':
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-With this base you can make any flask code, modify the API and adapt it to your projects. It is important that you study the docker code to understand what is behind each file in both the Docker and the docker-compose.yml.
+With this base you can make any flask code, modify the API and adapt it to your projects.
 
 
 
 <!-- ROADMAP -->
 ## Roadmap
 
-See the [open issues](https://github.com/aldomatus/flask_rest_api/issues) for a list of proposed features (and known issues).
+See the [open issues](https://github.com/aldomatus/flask-sqlachemy_postgresql_rest-api/issues) for a list of proposed features (and known issues).
 
 
 
@@ -440,7 +461,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 Aldo Matus - [Linkedin](https://www.linkedin.com/in/aldomatus/) [Facebook](https://www.facebook.com/aldo.matusmartinez/)
 
-Project Link: [Repository](https://github.com/aldomatus/flask_rest_api/)
+Project Link: [Repository](https://github.com/aldomatus/flask-sqlachemy_postgresql_rest-api/)
 
 
 
