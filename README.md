@@ -111,9 +111,26 @@ Let's create a database from the terminal:
    
 ```
 
-2. 
-
-
+2. once in postgres we can create a database for our application. You can decide the name of the database, in this case I will call it flaskpostgres
+```
+   create database flaskpostgres;
+   
+```
+3. You can check that your database is created with the following command, where all the databases that you have on your computer will appear, among them must be flaskpostgres
+```
+   \l
+   
+```
+You will see something like this:
+```
+                                      List of databases
+       Name        |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges   
+-------------------+----------+----------+-------------+-------------+-----------------------
+ articulosclientes | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+ flaskpostgres     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+ flaskprueba1      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+ online_store      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+```
 
 <!-- EXPLAIN CODE -->
 ## Description of the REST API code
@@ -217,31 +234,67 @@ from flask_marshmallow import Marshmallow
 
 app = Flask(__name__)
 ```
- 2. The client (such as a web browser) sends the request to the web server and the web server sends the request to the Flask application instance. The application instance needs to know what code to execute for each URL request, so the application instance keeps a function mapping relationship from URL to Python. The program that handles the relationship between URLs and functions is called routing.
+ 2. Configure Flask by providing the PostgreSQL URI so that the app is able to connect to the database, through : app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://DB_USER:PASSWORD@HOST/DATABASE' where you have to replace all the parameters in capital letters (after postgresq://). Find out more on URI definition for PostgreSQL [here](https://www.postgresql.org/docs/9.3/libpq-connect.html#AEN39449).
+  
+```python  
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@localhost/flaskpostgres'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+```  
+ 3. We make the instances of SQLALchemy (to work with the database) and Marshmallow (For schemas and work with the database) of our application app
+```python 
+db = SQLAlchemy(app)
+ma = Marshmallow(app)
+``` 
+4. should include the definition of classes which define the models of your database tables. Such classes inherit from the class db.Model where db is your SQLAlchemy object.
+  
+```python 
+class Task(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(70), unique=True)
+    description = db.Column(db.String(100))
+
+    def __init__(self, title, description):
+        self.title = title
+        self.description = description
+db.create_all()
+```
+5. Generate marshmallow Schemas from your models using SQLAlchemySchema or SQLAlchemyAutoSchema.
+```python 
+class TaskSchema(ma.Schema):
+    class Meta:
+        fields = ('id', 'title', 'description')
+
+
+task_schema = TaskSchema()
+tasks_schema = TaskSchema(many=True)
+```
+6. The client (such as a web browser) sends the request to the web server and the web server sends the request to the Flask application instance. The application instance needs to know what code to execute for each URL request, so the application instance keeps a function mapping relationship from URL to Python. The program that handles the relationship between URLs and functions is called routing.
 
 Use what is provided by the application instance in Flask app.route The decorator registers the decorated function as a path:
 > A decorator (@) is a design pattern in Python that allows a user to add new functionality to an existing object without modifying its structure. Decorators are usually called before the definition of a function you want to decorate.
   
 ```python
   
-#   Testing route
-@app.route('/ping', methods=['GET'])
-def ping():
-    return jsonify({'response':'ping!'})
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({'message': 'Welcome to my API'})
 ```
-   3. The following decorated function uses the POST method. "Used to send HTML form data to the server. The data received by the POST method is not cached by the server."[1] The following decorated function uses the POST method. The most common method. A GET message is send, and the server returns data. In our example we receive the data sent with request and save it in a dictionary that is later added to the list of products with the append method..
+  
+   3. The following decorated function uses the POST method. "Used to send HTML form data to the server. The data received by the POST method is not cached by the server."[1] The following decorated function uses the POST method. The most common method. A GET message is send, and the server returns data. In our example we receive the data sent wi
+
 ```python
   
-#   Create new products
-@app.route('/products', methods=['POST'])
-def addProduct():
-    new_product = {
-        'name': request.json['name'],
-        'price': request.json['price'],
-        'quantity': 12
-    }
-    products.append(new_product)
-    return jsonify({'products': products})
+@app.route('/tasks', methods=['POST'])
+def create_task():
+    title = request.json['title']
+    description = request.json['description']
+
+    new_task= Task(title, description)
+
+    db.session.add(new_task)
+    db.session.commit()
+
+    return task_schema.jsonify(new_task)
 ```
   
   
